@@ -1,9 +1,10 @@
 import { auth, signIn, signOut } from "@/auth";
 import { listEventsForTargets } from "@/lib/google";
 import { buildTargets, ROOM, PEOPLE, resolveParticipants, type Person } from "@/lib/people";
-import { buildWeekSummary, type SummaryCell } from "@/lib/availability";
-import { parseMeetingRequest } from "@/lib/ai";
-import type { MeetingRequest } from "@/lib/schemas";
+import { buildWeekSummary, findCandidateSlots, type SummaryCell } from "@/lib/availability";
+import { parseMeetingRequest, addReasons } from "@/lib/ai";
+import type { MeetingRequest, Candidate } from "@/lib/schemas";
+import { SearchForm } from "./search-form";
 
 // 空いている人数の割合 → セルの背景色
 function cellColor(free: number, total: number): string {
@@ -59,6 +60,40 @@ export default async function Home({
     parsed = { request, matched, unmatched };
   }
 
+  // 解析できたら候補を計算（参加者＋会議室の予定を取得 → 近い順 → AIで根拠付け）
+  let candidates: Candidate[] | null = null;
+  if (parsed && parsed.matched.length > 0) {
+    const targets = [
+      ...parsed.matched.map((p) => ({ name: p.name, calendarId: p.email })),
+      { name: ROOM.name, calendarId: ROOM.calendarId },
+    ];
+    const events = await listEventsForTargets(
+      session.accessToken,
+      targets,
+      `${parsed.request.dateRange.from}T00:00:00+09:00`,
+      `${parsed.request.dateRange.to}T23:59:59+09:00`,
+    );
+    const peopleTargets = events.filter((e) => e.calendarId !== ROOM.calendarId);
+    const roomTarget = events.find((e) => e.calendarId === ROOM.calendarId);
+
+    const slots = findCandidateSlots(
+      peopleTargets,
+      roomTarget,
+      parsed.request.durationMinutes,
+      parsed.request.dateRange,
+    ).slice(0, 8); // AIに渡すのは上位8件（近い順・トークン節約）
+
+    const reasons = await addReasons(slots);
+    candidates = slots.map((s, i) => ({
+      start: s.start,
+      end: s.end,
+      score: 100 - i, // 近い順 → 先頭が高スコア（暫定）
+      roomAvailable: s.roomAvailable,
+      reason: reasons[i]?.reason ?? "",
+      warnings: reasons[i]?.warnings ?? [],
+    }));
+  }
+
   // 今週を含む2週間分を取得（サマリーは今週分だけ使う）
   const now = new Date();
   const twoWeeksLater = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
@@ -82,18 +117,8 @@ export default async function Home({
         </form>
       </div>
 
-      {/* 一文で依頼を入力 */}
-      <form className="mb-4 flex gap-2">
-        <input
-          name="q"
-          defaultValue={q ?? ""}
-          placeholder="例: 来週 長尾さんと60分"
-          className="flex-1 rounded border px-3 py-2 text-sm"
-        />
-        <button className="rounded bg-black px-4 py-2 text-sm text-white cursor-pointer">
-          解析
-        </button>
-      </form>
+      {/* 一文で依頼を入力（解析中はローディング表示） */}
+      <SearchForm initialQ={q ?? ""} />
 
       {parsed && (
         <div className="mb-6 rounded-lg border p-4 text-sm">
@@ -110,6 +135,55 @@ export default async function Home({
               </span>
             )}
           </p>
+        </div>
+      )}
+
+      {candidates && (
+        <div className="mb-6">
+          <h2 className="mb-2 font-medium">候補（近い順）</h2>
+          {candidates.length === 0 ? (
+            <p className="text-sm text-zinc-500">条件に合う空き枠が見つかりませんでした。</p>
+          ) : (
+            <div className="flex flex-col gap-3">
+              {candidates.map((c) => (
+                <div key={c.start} className="rounded-lg border p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">
+                      {new Date(c.start).toLocaleString("ja-JP", {
+                        timeZone: "Asia/Tokyo",
+                        month: "numeric",
+                        day: "numeric",
+                        weekday: "short",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                      〜
+                      {new Date(c.end).toLocaleTimeString("ja-JP", {
+                        timeZone: "Asia/Tokyo",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}
+                    </span>
+                    <span
+                      className={
+                        c.roomAvailable ? "text-green-600 text-xs" : "text-red-600 text-xs"
+                      }
+                    >
+                      {c.roomAvailable ? "会議室 空き" : "会議室 埋"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-zinc-600">{c.reason}</p>
+                  {c.warnings.length > 0 && (
+                    <ul className="mt-1 list-disc pl-5 text-xs text-amber-700">
+                      {c.warnings.map((w, i) => (
+                        <li key={i}>{w}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

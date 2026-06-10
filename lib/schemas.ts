@@ -20,3 +20,28 @@ export const MeetingRequestSchema = z.object({
 });
 
 export type MeetingRequest = z.infer<typeof MeetingRequestSchema>;
+
+// 候補1件（start/end/score/roomAvailable=決定的, reason/warnings=AI生成）
+export const CandidateSchema = z.object({
+  start: z.string(),
+  end: z.string(),
+  score: z.number(),
+  reason: z.string(),
+  warnings: z.array(z.string()).default([]),
+  roomAvailable: z.boolean(),
+});
+export type Candidate = z.infer<typeof CandidateSchema>;
+
+// AIに作らせるのは reason/warnings だけ（入力スロットと同順・同数で返させる）
+export const SlotReasonsSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        reason: z.string().describe("この時間が良い理由を1文・簡潔・日本語で"),
+        warnings: z
+          .array(z.string())
+          .describe("懸念（会議室が空いていない等）。無ければ空配列"),
+      }),
+    )
+    .describe("入力スロットと同じ順序・同じ件数で返すこと"),
+});

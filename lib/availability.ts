@@ -169,3 +169,52 @@ export function buildWeekSummary(
 
   return { timeLabels, days, totalPeople: peopleBusy.length };
 }
+
+// ===== M4: 候補スロット算出 =====
+
+export type CandidateSlot = { start: string; end: string; roomAvailable: boolean };
+
+// 参加者（人）が全員空く枠を、指定期間（from〜to）・近い順で算出。会議室の空きはフラグで付与
+export function findCandidateSlots(
+  peopleTargets: TargetEvents[],
+  roomTarget: TargetEvents | undefined,
+  durationMinutes: number,
+  range: { from: string; to: string },
+  stepMinutes = 30,
+): CandidateSlot[] {
+  const peopleBusy = peopleTargets.map((t) => busyIntervalsOf(t.events));
+  const roomBusy = roomTarget ? busyIntervalsOf(roomTarget.events) : [];
+
+  const slots: CandidateSlot[] = [];
+  const fromMs = new Date(`${range.from}T00:00:00+09:00`).getTime();
+  const toMs = new Date(`${range.to}T00:00:00+09:00`).getTime();
+
+  for (let dayMs = fromMs; dayMs <= toMs; dayMs += 86400000) {
+    const d = new Date(dayMs);
+    const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(d);
+    const weekday = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Tokyo",
+      weekday: "short",
+    }).format(d);
+    if (weekday === "Sat" || weekday === "Sun") continue;
+
+    const lastStartMinute = BUSINESS_END_HOUR * 60 - durationMinutes;
+    for (let m = BUSINESS_START_HOUR * 60; m <= lastStartMinute; m += stepMinutes) {
+      const startIso = `${ymd}T${pad(Math.floor(m / 60))}:${pad(m % 60)}:00+09:00`;
+      const startMs = new Date(startIso).getTime();
+      const endMs = startMs + durationMinutes * 60000;
+
+      // 参加者全員が空いているか（人単位で重なりチェック）
+      const everyoneFree = peopleBusy.every(
+        (intervals) => !intervals.some((b) => startMs < b.end && b.start < endMs),
+      );
+      if (!everyoneFree) continue;
+
+      const endMin = m + durationMinutes;
+      const endIso = `${ymd}T${pad(Math.floor(endMin / 60))}:${pad(endMin % 60)}:00+09:00`;
+      const roomAvailable = !roomBusy.some((b) => startMs < b.end && b.start < endMs);
+      slots.push({ start: startIso, end: endIso, roomAvailable });
+    }
+  }
+  return slots; // 既に開始時刻の昇順＝近い順
+}
