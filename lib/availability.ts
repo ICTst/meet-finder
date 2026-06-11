@@ -20,7 +20,7 @@ function todayYmdJst(): string {
 }
 
 // 1カレンダー分のイベント → busy区間（epoch ms）に変換
-function busyIntervalsOf(events: CalendarEvent[]): { start: number; end: number }[] {
+export function busyIntervalsOf(events: CalendarEvent[]): { start: number; end: number }[] {
   const out: { start: number; end: number }[] = [];
   for (const ev of events) {
     if (ev.status === "cancelled") continue; // キャンセル済みは無視
@@ -217,4 +217,101 @@ export function findCandidateSlots(
     }
   }
   return slots; // 既に開始時刻の昇順＝近い順
+}
+
+// ===== M6: 分類済み参加者から候補スロット（hard=除外, soft=注釈）=====
+
+export type CandidateSlotEx = {
+  start: string;
+  end: string;
+  roomAvailable: boolean;
+  adjustable: boolean; // hardは無いがsoft/tentativeが重なる
+  softConflicts: string[]; // soft/tentativeを持つ人の名前
+};
+
+export function findCandidateSlotsCategorized(
+  people: {
+    name: string;
+    hard: { start: number; end: number }[];
+    soft: { start: number; end: number }[];
+  }[],
+  roomBusy: { start: number; end: number }[],
+  durationMinutes: number,
+  range: { from: string; to: string },
+  stepMinutes = 30,
+): CandidateSlotEx[] {
+  const out: CandidateSlotEx[] = [];
+  const fromMs = new Date(`${range.from}T00:00:00+09:00`).getTime();
+  const toMs = new Date(`${range.to}T00:00:00+09:00`).getTime();
+
+  for (let dayMs = fromMs; dayMs <= toMs; dayMs += 86400000) {
+    const d = new Date(dayMs);
+    const ymd = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(d);
+    const weekday = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Tokyo",
+      weekday: "short",
+    }).format(d);
+    if (weekday === "Sat" || weekday === "Sun") continue;
+
+    const lastStartMinute = BUSINESS_END_HOUR * 60 - durationMinutes;
+    for (let m = BUSINESS_START_HOUR * 60; m <= lastStartMinute; m += stepMinutes) {
+      const startIso = `${ymd}T${pad(Math.floor(m / 60))}:${pad(m % 60)}:00+09:00`;
+      const startMs = new Date(startIso).getTime();
+      const endMs = startMs + durationMinutes * 60000;
+      const hits = (iv: { start: number; end: number }[]) =>
+        iv.some((b) => startMs < b.end && b.start < endMs);
+
+      if (people.some((p) => hits(p.hard))) continue; // hardで埋まってたら除外
+
+      const softConflicts = people.filter((p) => hits(p.soft)).map((p) => p.name);
+      const endMin = m + durationMinutes;
+      const endIso = `${ymd}T${pad(Math.floor(endMin / 60))}:${pad(endMin % 60)}:00+09:00`;
+      out.push({
+        start: startIso,
+        end: endIso,
+        roomAvailable: !hits(roomBusy),
+        adjustable: softConflicts.length > 0,
+        softConflicts,
+      });
+    }
+  }
+  return out;
+}
+
+// ===== M6-C: 会議室の付け忘れ検出 =====
+
+export type RoomForgotten = { name: string; start: string; end: string };
+
+// 「会議」タイトルなのに会議室が予約されていない予定を検出（今週・全員分）
+export function detectRoomForgotten(
+  targets: TargetEvents[],
+  roomCalendarId: string,
+): RoomForgotten[] {
+  const room = targets.find((t) => t.calendarId === roomCalendarId);
+  const roomBusy = busyIntervalsOf(room?.events ?? []);
+
+  // 今週（月〜金）の範囲
+  const week = thisWeekWeekdays();
+  const fromMs = new Date(`${week[0].ymd}T00:00:00+09:00`).getTime();
+  const toMs = new Date(`${week[week.length - 1].ymd}T23:59:59+09:00`).getTime();
+
+  const out: RoomForgotten[] = [];
+  for (const t of targets) {
+    if (t.calendarId === roomCalendarId) continue; // 会議室自身は対象外
+    for (const ev of t.events) {
+      if (ev.status === "cancelled") continue;
+      if (!ev.summary?.includes("会議")) continue; // タイトルに「会議」
+      const s = ev.start?.dateTime;
+      const e = ev.end?.dateTime;
+      if (!s || !e) continue; // 終日は対象外
+      const startMs = new Date(s).getTime();
+      const endMs = new Date(e).getTime();
+      if (startMs < fromMs || startMs > toMs) continue; // 今週のみ
+
+      // この時間に会議室が予約されているか
+      const roomBooked = roomBusy.some((b) => startMs < b.end && b.start < endMs);
+      if (!roomBooked) out.push({ name: t.name, start: s, end: e });
+    }
+  }
+  return out;
 }

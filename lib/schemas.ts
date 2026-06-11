@@ -32,6 +32,17 @@ export const CandidateSchema = z.object({
 });
 export type Candidate = z.infer<typeof CandidateSchema>;
 
+// 曖昧な予定のAI分類結果（入力イベントと同順・同数）
+export const EventClassesSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        category: z.enum(["hard", "soft", "tentative", "allday_block"]),
+      }),
+    )
+    .describe("入力イベントと同じ順序・同じ件数で返すこと"),
+});
+
 // AIに作らせるのは reason/warnings だけ（入力スロットと同順・同数で返させる）
 export const SlotReasonsSchema = z.object({
   items: z

@@ -1,6 +1,12 @@
 import { google } from "@ai-sdk/google";
 import { generateText, Output } from "ai";
-import { MeetingRequestSchema, SlotReasonsSchema, type MeetingRequest } from "./schemas";
+import {
+  MeetingRequestSchema,
+  SlotReasonsSchema,
+  EventClassesSchema,
+  type MeetingRequest,
+} from "./schemas";
+import type { EventCategory } from "./classify";
 
 // モデルは1か所に集約（将来ここを差し替えれば全体が切り替わる）
 const model = google("gemini-2.5-flash-lite");
@@ -40,4 +46,25 @@ export async function addReasons(
   });
 
   return output.items;
+}
+
+// 曖昧な予定（タイトル＋長さ）をまとめてAI分類
+export async function classifyAmbiguousEvents(
+  events: { summary: string; durationMinutes: number }[],
+): Promise<Exclude<EventCategory, "free">[]> {
+  if (events.length === 0) return [];
+
+  const { output } = await generateText({
+    model,
+    output: Output.object({ schema: EventClassesSchema }),
+    prompt: `次の予定を分類してください。
+- hard: 確定会議・商談など動かせない予定
+- soft: 作業時間・タスク枠・集中時間など相談で動かせる予定
+- tentative: 仮予定
+- allday_block: 終日ブロック
+入力と同じ順序・同じ件数で返してください。
+予定一覧（タイトルと長さ分）: ${JSON.stringify(events)}`,
+  });
+
+  return output.items.map((i) => i.category);
 }

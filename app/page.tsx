@@ -1,7 +1,14 @@
 import { auth, signIn, signOut } from "@/auth";
 import { listEventsForTargets } from "@/lib/google";
 import { buildTargets, ROOM, PEOPLE, resolveParticipants, type Person } from "@/lib/people";
-import { buildWeekSummary, findCandidateSlots, type SummaryCell } from "@/lib/availability";
+import {
+  buildWeekSummary,
+  findCandidateSlotsCategorized,
+  busyIntervalsOf,
+  type SummaryCell,
+  type CandidateSlotEx,
+} from "@/lib/availability";
+import { categorizeTargets } from "@/lib/categorize";
 import { parseMeetingRequest, addReasons } from "@/lib/ai";
 import type { MeetingRequest, Candidate } from "@/lib/schemas";
 import { SearchForm } from "./search-form";
@@ -61,8 +68,9 @@ export default async function Home({
     parsed = { request, matched, unmatched };
   }
 
-  // 解析できたら候補を計算（参加者＋会議室の予定を取得 → 近い順 → AIで根拠付け）
+  // 解析できたら候補を計算（参加者＋会議室の予定を取得 → 分類 → 近い順 → AIで根拠付け）
   let candidates: Candidate[] | null = null;
+  let adjustable: CandidateSlotEx[] = [];
   if (parsed && parsed.matched.length > 0) {
     const targets = [
       ...parsed.matched.map((p) => ({ name: p.name, calendarId: p.email })),
@@ -77,15 +85,23 @@ export default async function Home({
     const peopleTargets = events.filter((e) => e.calendarId !== ROOM.calendarId);
     const roomTarget = events.find((e) => e.calendarId === ROOM.calendarId);
 
-    const slots = findCandidateSlots(
-      peopleTargets,
-      roomTarget,
+    // 機械＋AIで分類してから候補算出
+    const categorized = await categorizeTargets(peopleTargets);
+    const roomBusy = busyIntervalsOf(roomTarget?.events ?? []);
+    const exSlots = findCandidateSlotsCategorized(
+      categorized,
+      roomBusy,
       parsed.request.durationMinutes,
       parsed.request.dateRange,
-    ).slice(0, 8); // AIに渡すのは上位8件（近い順・トークン節約）
+    );
 
-    const reasons = await addReasons(slots);
-    candidates = slots.map((s, i) => ({
+    const cleanSlots = exSlots.filter((s) => !s.adjustable).slice(0, 8);
+    adjustable = exSlots.filter((s) => s.adjustable).slice(0, 6);
+
+    const reasons = await addReasons(
+      cleanSlots.map((s) => ({ start: s.start, end: s.end, roomAvailable: s.roomAvailable })),
+    );
+    candidates = cleanSlots.map((s, i) => ({
       start: s.start,
       end: s.end,
       score: 100 - i, // 近い順 → 先頭が高スコア（暫定）
@@ -200,6 +216,37 @@ export default async function Home({
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {adjustable.length > 0 && (
+        <div className="mb-6">
+          <h2 className="mb-2 font-medium text-zinc-600">調整すれば可能な枠（参考）</h2>
+          <div className="flex flex-col gap-2">
+            {adjustable.map((s) => (
+              <div key={s.start} className="rounded-lg border border-dashed p-3 text-sm">
+                <span className="font-medium">
+                  {new Date(s.start).toLocaleString("ja-JP", {
+                    timeZone: "Asia/Tokyo",
+                    month: "numeric",
+                    day: "numeric",
+                    weekday: "short",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                  〜
+                  {new Date(s.end).toLocaleTimeString("ja-JP", {
+                    timeZone: "Asia/Tokyo",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <p className="mt-1 text-xs text-amber-700">
+                  {s.softConflicts.join("・")} がタスク枠／仮予定（調整できるかも）
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
