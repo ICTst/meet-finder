@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.80",
+    "@langfuse/otel": "^5.4.1",
+    "@opentelemetry/sdk-trace-node": "^2.7.1",
     "ai": "^6.0.197",
     "next": "16.2.7",
     "next-auth": "^5.0.0-beta.31",

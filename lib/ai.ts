@@ -25,6 +25,7 @@ export async function parseMeetingRequest(userText: string): Promise<MeetingRequ
             今日は ${today}（Asia/Tokyo）です。「来週」「明日」などの相対表現は絶対日付(YYYY-MM-DD)に解決してください。
             所要時間の指定が無ければ 60 分。期間の指定が無ければ翌営業日から約2週間後までにしてください。
             依頼文: """${userText}"""`,
+    experimental_telemetry: { isEnabled: true, functionId: "parse-meeting-request" },
   });
 
   return output;
@@ -43,6 +44,7 @@ export async function addReasons(
             懸念があれば warnings に入れてください。roomAvailable が false のスロットは「会議室が空いていない」旨を必ず warnings に入れてください。
             入力と同じ順序・同じ件数で返すこと。
             スロット一覧: ${JSON.stringify(slots)}`,
+    experimental_telemetry: { isEnabled: true, functionId: "add-reasons" },
   });
 
   return output.items;
@@ -64,6 +66,7 @@ export async function classifyAmbiguousEvents(
 - allday_block: 終日ブロック
 入力と同じ順序・同じ件数で返してください。
 予定一覧（タイトルと長さ分）: ${JSON.stringify(events)}`,
+    experimental_telemetry: { isEnabled: true, functionId: "classify-events" },
   });
 
   return output.items.map((i) => i.category);
