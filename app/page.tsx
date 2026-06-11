@@ -5,6 +5,7 @@ import { buildWeekSummary, findCandidateSlots, type SummaryCell } from "@/lib/av
 import { parseMeetingRequest, addReasons } from "@/lib/ai";
 import type { MeetingRequest, Candidate } from "@/lib/schemas";
 import { SearchForm } from "./search-form";
+import { BookButton } from "./book-button";
 
 // 空いている人数の割合 → セルの背景色
 function cellColor(free: number, total: number): string {
@@ -94,6 +95,14 @@ export default async function Home({
     }));
   }
 
+  // 予約に渡す情報（参加者のメール＋会議室ID、タイトルは「会議：…」）
+  const bookingAttendees = parsed
+    ? [...parsed.matched.map((p) => p.email), ROOM.calendarId]
+    : [];
+  const bookingSummary = parsed
+    ? `会議：${parsed.matched.map((p) => p.name).join("、")}`
+    : "";
+
   // 今週を含む2週間分を取得（サマリーは今週分だけ使う）
   const now = new Date();
   const twoWeeksLater = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
@@ -180,6 +189,13 @@ export default async function Home({
                       ))}
                     </ul>
                   )}
+
+                  <BookButton
+                    start={c.start}
+                    end={c.end}
+                    summary={bookingSummary}
+                    attendees={bookingAttendees}
+                  />
                 </div>
               ))}
             </div>

@@ -74,3 +74,74 @@ export async function listEventsForTargets(
     }),
   );
 }
+
+// ===== M5: 確定直前の再確認 & 予定作成 =====
+
+export type FreeBusyResult = { allFree: boolean; busyBy: string[] };
+
+// 対象カレンダー群が、指定スロットで全員空いているか再確認
+export async function checkFreeBusy(
+  accessToken: string,
+  calendarIds: string[],
+  timeMin: string,
+  timeMax: string,
+): Promise<FreeBusyResult> {
+  const res = await fetch(`${CALENDAR_API}/freeBusy`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
+    body: JSON.stringify({
+      timeMin,
+      timeMax,
+      items: calendarIds.map((id) => ({ id })),
+    }),
+  });
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`FreeBusy error ${res.status}: ${body}`);
+  }
+
+  const data = await res.json();
+  const busyBy: string[] = [];
+  for (const id of calendarIds) {
+    const busy = data.calendars?.[id]?.busy ?? [];
+    if (busy.length > 0) busyBy.push(id);
+  }
+  return { allFree: busyBy.length === 0, busyBy };
+}
+
+// 予定を作成（自分のprimaryに、参加者＋会議室をattendeeで。通知なし）
+export async function insertEvent(
+  accessToken: string,
+  params: { summary: string; start: string; end: string; attendees: string[] },
+): Promise<{ id: string; htmlLink: string }> {
+  const res = await fetch(
+    `${CALENDAR_API}/calendars/primary/events?sendUpdates=none`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+      body: JSON.stringify({
+        summary: params.summary,
+        start: { dateTime: params.start, timeZone: "Asia/Tokyo" },
+        end: { dateTime: params.end, timeZone: "Asia/Tokyo" },
+        attendees: params.attendees.map((email) => ({ email })),
+      }),
+    },
+  );
+
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`events.insert error ${res.status}: ${body}`);
+  }
+
+  const data = await res.json();
+  return { id: data.id, htmlLink: data.htmlLink };
+}
