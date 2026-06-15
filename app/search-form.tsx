@@ -2,6 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 
 // 一文入力フォーム（解析中はローディング表示）
 export function SearchForm({ initialQ }: { initialQ: string }) {
@@ -11,7 +13,7 @@ export function SearchForm({ initialQ }: { initialQ: string }) {
 
   return (
     <form
-      className="mb-4 flex gap-2"
+      className="mb-6 flex gap-2"
       onSubmit={(e) => {
         e.preventDefault();
         // ソフト遷移にすることで、サーバー再レンダリング中 isPending が true になる
@@ -20,23 +22,18 @@ export function SearchForm({ initialQ }: { initialQ: string }) {
         });
       }}
     >
-      <input
+      <Input
         value={q}
         onChange={(e) => setQ(e.target.value)}
         placeholder="例: 来週 長尾さんと60分"
         disabled={isPending}
-        className="flex-1 rounded border px-3 py-2 text-sm disabled:bg-zinc-100"
       />
-      <button
-        type="submit"
-        disabled={isPending}
-        className="flex items-center gap-2 rounded bg-black px-4 py-2 text-sm text-white cursor-pointer disabled:opacity-60"
-      >
+      <Button type="submit" disabled={isPending}>
         {isPending && (
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
         )}
         {isPending ? "解析中…" : "解析"}
-      </button>
+      </Button>
     </form>
   );
 }

@@ -38,6 +38,30 @@ function collectBusy(targets: TargetEvents[]): { start: number; end: number }[] 
   return targets.flatMap((t) => busyIntervalsOf(t.events));
 }
 
+// 会議室用: 時刻あり予定＋終日予定（終日ぶん占有）を busy として返す
+export function roomBusyIntervals(
+  events: CalendarEvent[],
+): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  for (const ev of events) {
+    if (ev.status === "cancelled") continue;
+    if (ev.transparency === "transparent") continue;
+    if (ev.start?.dateTime && ev.end?.dateTime) {
+      out.push({
+        start: new Date(ev.start.dateTime).getTime(),
+        end: new Date(ev.end.dateTime).getTime(),
+      });
+    } else if (ev.start?.date && ev.end?.date) {
+      // 終日予約は終日ぶん占有扱い（会議室を終日押さえている）
+      out.push({
+        start: new Date(`${ev.start.date}T00:00:00+09:00`).getTime(),
+        end: new Date(`${ev.end.date}T00:00:00+09:00`).getTime(),
+      });
+    }
+  }
+  return out;
+}
+
 // 共通空きスロットを算出（全員＋会議室が空いている duration 分の枠）
 export function findCommonFreeSlots(
   targets: TargetEvents[],
@@ -136,7 +160,7 @@ export function buildWeekSummary(
     .filter((t) => t.calendarId !== roomCalendarId)
     .map((t) => busyIntervalsOf(t.events));
   const room = targets.find((t) => t.calendarId === roomCalendarId);
-  const roomBusy = room ? busyIntervalsOf(room.events) : [];
+  const roomBusy = room ? roomBusyIntervals(room.events) : []; // 終日予約も占有扱い
 
   // 時間行（9:00〜18:00 の 30分刻み）。ラベルは「開始–終了」の範囲表記
   const timeLabels: string[] = [];
@@ -314,4 +338,38 @@ export function detectRoomForgotten(
     }
   }
   return out;
+}
+
+// ===== 会議室の直近の利用予定 =====
+
+export type RoomUsage = {
+  start: string;
+  end: string;
+  allDay: boolean;
+  organizerEmail?: string;
+  organizerName?: string;
+  tentative: boolean;
+};
+
+// 会議室カレンダーから「終了が未来」の予定を開始順に最大 limit 件
+export function listRoomUsage(events: CalendarEvent[], limit = 5): RoomUsage[] {
+  const nowMs = Date.now();
+  return events
+    .filter((ev) => ev.status !== "cancelled")
+    .map((ev) => {
+      const timed = !!(ev.start?.dateTime && ev.end?.dateTime);
+      const start = ev.start?.dateTime ?? (ev.start?.date ? `${ev.start.date}T00:00:00+09:00` : "");
+      const end = ev.end?.dateTime ?? (ev.end?.date ? `${ev.end.date}T00:00:00+09:00` : "");
+      return {
+        start,
+        end,
+        allDay: !timed,
+        organizerEmail: ev.organizer?.email,
+        organizerName: ev.organizer?.displayName,
+        tentative: ev.status === "tentative",
+      };
+    })
+    .filter((u) => u.start && u.end && new Date(u.end).getTime() >= nowMs)
+    .sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime())
+    .slice(0, limit);
 }

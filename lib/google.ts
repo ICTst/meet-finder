@@ -6,6 +6,8 @@ export type CalendarEvent = {
   status?: string;        // "confirmed" | "tentative" | "cancelled"
   transparency?: string;  // "opaque"(=予定あり) | "transparent"(=空きとして扱う)
   eventType?: string;     // "default" | "outOfOffice" | "focusTime" など
+  organizer?: { email?: string; displayName?: string }; // 予約者
+  creator?: { email?: string; displayName?: string };
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
 };
