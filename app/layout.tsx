@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MeetFinder",
+  title: "みんなの日程調整くん",
   description: "AIで会議の空き枠を見つけてワンタップ予約",
 };
 

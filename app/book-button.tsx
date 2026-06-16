@@ -26,7 +26,7 @@ export function BookButton({
       <input type="hidden" name="end" value={end} />
       <input type="hidden" name="summary" value={summary} />
       <input type="hidden" name="attendees" value={JSON.stringify(attendees)} />
-      <Button type="submit" size="sm" disabled={isPending || state?.ok === true}>
+      <Button type="submit" className="cursor-pointer" size="sm" disabled={isPending || state?.ok === true}>
         {isPending ? "予約中…" : state?.ok ? "予約済み ✓" : "この時間で予約"}
       </Button>
       {state && !state.ok && (

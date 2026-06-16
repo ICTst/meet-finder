@@ -1,4 +1,5 @@
 import type { TargetEvents, CalendarEvent } from "./google";
+import { classifyByMachineSignals } from "./classify";
 
 export type Slot = {
   start: string; 
@@ -150,10 +151,70 @@ function thisWeekWeekdays(): { ymd: string; label: string }[] {
   return out;
 }
 
-// 週サマリーを組み立てる（人の空き濃淡＋会議室占有）
+// 今日(JST)起点で土日を除く平日を並べ、offsetページ目(count日ずつ)を返す
+// 例: offset=0 → 今日からの平日5日 / offset=1 → その次の平日5日
+export function businessDaysPage(
+  offset: number,
+  count = 5,
+): { ymd: string; label: string }[] {
+  const base = new Date(`${todayYmdJst()}T00:00:00+09:00`).getTime();
+  const need = (offset + 1) * count; // 先頭からこの数だけ平日を集める
+  const days: { ymd: string; label: string }[] = [];
+  let i = 0;
+  while (days.length < need && i < 400) {
+    const d = new Date(base + i * 86400000);
+    const weekday = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Tokyo",
+      weekday: "short",
+    }).format(d);
+    if (weekday !== "Sat" && weekday !== "Sun") {
+      days.push({
+        ymd: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(d),
+        label: d.toLocaleDateString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+          month: "numeric",
+          day: "numeric",
+          weekday: "short",
+        }),
+      });
+    }
+    i++;
+  }
+  return days.slice(offset * count, offset * count + count);
+}
+
+// 今日(JST)起点で土日を除いた offset 番目(0始まり)の平日を返す
+export function businessDay(offset: number): { ymd: string; label: string } {
+  const base = new Date(`${todayYmdJst()}T00:00:00+09:00`).getTime();
+  let count = 0;
+  for (let i = 0; i < 400; i++) {
+    const d = new Date(base + i * 86400000);
+    const weekday = new Intl.DateTimeFormat("en-US", {
+      timeZone: "Asia/Tokyo",
+      weekday: "short",
+    }).format(d);
+    if (weekday === "Sat" || weekday === "Sun") continue;
+    if (count === offset) {
+      return {
+        ymd: new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Tokyo" }).format(d),
+        label: d.toLocaleDateString("ja-JP", {
+          timeZone: "Asia/Tokyo",
+          month: "numeric",
+          day: "numeric",
+          weekday: "short",
+        }),
+      };
+    }
+    count++;
+  }
+  return { ymd: todayYmdJst(), label: "" }; // フォールバック（通常到達しない）
+}
+
+// 週サマリーを組み立てる（人の空き濃淡＋会議室占有）。表示する平日リストを受け取る
 export function buildWeekSummary(
   targets: TargetEvents[],
   roomCalendarId: string,
+  daysInput: { ymd: string; label: string }[],
 ): WeekSummary {
   // 人と会議室を分ける
   const peopleBusy = targets
@@ -172,7 +233,7 @@ export function buildWeekSummary(
     minutes.push(m);
   }
 
-  const days: SummaryDay[] = thisWeekWeekdays().map(({ ymd, label }) => {
+  const days: SummaryDay[] = daysInput.map(({ ymd, label }) => {
     const cells: SummaryCell[] = minutes.map((m, idx) => {
       const startMs = new Date(
         `${ymd}T${pad(Math.floor(m / 60))}:${pad(m % 60)}:00+09:00`,
@@ -192,6 +253,65 @@ export function buildWeekSummary(
   });
 
   return { timeLabels, days, totalPeople: peopleBusy.length };
+}
+
+// ===== メンバー別ヒートマップ（1日分・9:00–18:00 の30分帯）=====
+
+export type MemberSlotState = "free" | "soft" | "hard"; // 空 / オレンジ / 赤
+export type MemberHeatmap = {
+  name: string;
+  cells: MemberSlotState[]; // 9:00–18:00 の30分 ×18
+};
+
+// 機械シグナル＋fix prefix のみで「動かせない(hard)／その他予定(soft)／空(free)」に寄せる（AIは使わない）
+function memberCellCategory(ev: CalendarEvent): MemberSlotState {
+  const c = classifyByMachineSignals(ev);
+  if (c === "free") return "free";
+  if (c === "hard") return "hard";
+  return "soft"; // soft / tentative / allday_block / ambiguous はすべて「その他予定」
+}
+
+// 指定日(ymd)の各メンバーについて、9:00–18:00 を30分刻みで色分けした帯を返す
+export function buildMemberDayHeatmaps(
+  peopleTargets: TargetEvents[],
+  ymd: string,
+): MemberHeatmap[] {
+  const slotStarts: number[] = [];
+  for (let m = 9 * 60; m < 18 * 60; m += 30) {
+    slotStarts.push(
+      new Date(`${ymd}T${pad(Math.floor(m / 60))}:${pad(m % 60)}:00+09:00`).getTime(),
+    );
+  }
+  const dayStart = new Date(`${ymd}T00:00:00+09:00`).getTime();
+  const dayEnd = dayStart + 86400000;
+
+  return peopleTargets.map((t) => {
+    const hard: { start: number; end: number }[] = [];
+    const soft: { start: number; end: number }[] = [];
+    for (const ev of t.events) {
+      const cat = memberCellCategory(ev);
+      if (cat === "free") continue;
+      let s: number, e: number;
+      if (ev.start?.dateTime && ev.end?.dateTime) {
+        s = new Date(ev.start.dateTime).getTime();
+        e = new Date(ev.end.dateTime).getTime();
+      } else if (ev.start?.date && ev.end?.date) {
+        s = new Date(`${ev.start.date}T00:00:00+09:00`).getTime();
+        e = new Date(`${ev.end.date}T00:00:00+09:00`).getTime(); // 終日 → その日全体
+      } else {
+        continue;
+      }
+      if (e <= dayStart || s >= dayEnd) continue; // 当日に重ならない
+      (cat === "hard" ? hard : soft).push({ start: s, end: e });
+    }
+    const cells: MemberSlotState[] = slotStarts.map((st) => {
+      const en = st + 30 * 60000;
+      if (hard.some((b) => st < b.end && b.start < en)) return "hard";
+      if (soft.some((b) => st < b.end && b.start < en)) return "soft";
+      return "free";
+    });
+    return { name: t.name, cells };
+  });
 }
 
 // ===== M4: 候補スロット算出 =====

@@ -25,14 +25,14 @@ export function SearchForm({ initialQ }: { initialQ: string }) {
       <Input
         value={q}
         onChange={(e) => setQ(e.target.value)}
-        placeholder="例: 来週 長尾さんと60分"
+        placeholder="例: 来週 長尾さん内田さんと60分"
         disabled={isPending}
       />
-      <Button type="submit" disabled={isPending}>
+      <Button type="submit" className="cursor-pointer" disabled={isPending}>
         {isPending && (
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
         )}
-        {isPending ? "解析中…" : "解析"}
+        {isPending ? "調整中…" : "調整する"}
       </Button>
     </form>
   );

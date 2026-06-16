@@ -8,6 +8,8 @@ export type CalendarEvent = {
   eventType?: string;     // "default" | "outOfOffice" | "focusTime" など
   organizer?: { email?: string; displayName?: string }; // 予約者
   creator?: { email?: string; displayName?: string };
+  // 参加者（自分=self:true / 会議室などのリソース=resource:true）
+  attendees?: { email?: string; self?: boolean; resource?: boolean; responseStatus?: string }[];
   start?: { dateTime?: string; date?: string };
   end?: { dateTime?: string; date?: string };
 };

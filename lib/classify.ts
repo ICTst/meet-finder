@@ -7,6 +7,23 @@ export type EventCategory =
   | "allday_block" // 終日ブロック
   | "free"; // 空きとして扱う（カウントしない）
 
+// タイトル先頭の "fix" は「動かせない予定」の明示マーク（[fix] / fix: / fix␣ を許容）
+export function hasFixPrefix(summary?: string): boolean {
+  if (!summary) return false;
+  return /^\s*(\[fix\]|fix[:：\s])/i.test(summary);
+}
+
+// 自分以外の参加者（人 or 会議室などのリソース）がいる＝実会議とみなす
+function hasOtherAttendees(ev: CalendarEvent): boolean {
+  return (ev.attendees ?? []).some((a) => a.self !== true);
+}
+
+// 「（名前）出社 / テレワーク」等の勤務形態メモは予定ではない（空き扱い）。書式は固定運用
+function isWorkLocationNote(summary?: string): boolean {
+  if (!summary) return false;
+  return /出社|テレワーク/.test(summary);
+}
+
 // 機械シグナルで分かる分を先に判定。判定できなければ "ambiguous" を返す
 export function classifyByMachineSignals(
   ev: CalendarEvent,
@@ -14,7 +31,10 @@ export function classifyByMachineSignals(
   if (ev.status === "cancelled") return "free"; // キャンセル
   if (ev.transparency === "transparent") return "free"; // 「空き時間」マーク
   if (ev.eventType === "workingLocation") return "free"; // 勤務地（予定ではない）
-  if (ev.status === "tentative") return "tentative"; // 仮承諾
+  if (isWorkLocationNote(ev.summary)) return "free"; // 出社/テレワークのメモは予定ではない
+  if (hasFixPrefix(ev.summary)) return "hard"; // タイトルに fix → 動かせない（最優先）
+  if (ev.status === "tentative") return "tentative"; // 仮承諾（参加者がいても未確定なので仮扱い）
+  if (hasOtherAttendees(ev)) return "hard"; // 自分以外の参加者がいる＝実会議→動かせない
   if (ev.eventType === "outOfOffice") return "hard"; // 不在＝動かせない
   if (ev.eventType === "focusTime") return "soft"; // 集中時間＝ずらせる
   if (ev.start?.date && !ev.start?.dateTime) return "allday_block"; // 終日
