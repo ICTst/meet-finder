@@ -16,6 +16,7 @@ import { parseMeetingRequest } from "@/lib/ai";
 import type { MeetingRequest } from "@/lib/schemas";
 import { SearchForm } from "./search-form";
 import { CandidateList, type CandidateRow } from "./candidate-list";
+import { Avatar } from "./avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
@@ -52,11 +53,11 @@ function fmtRange(start: string, end: string): string {
   return `${s}〜${e}`;
 }
 
-// メンバーヒートマップ1セルの色（赤=動かせない / オレンジ=その他予定 / 緑=空き）
+// メンバーヒートマップ1セルの色（赤=動かせない / オレンジ=その他予定 / 灰=空き）
 function memberCellColor(s: MemberSlotState): string {
   if (s === "hard") return "bg-red-400";
   if (s === "soft") return "bg-orange-300";
-  return "bg-emerald-100";
+  return "bg-zinc-200";
 }
 
 export default async function Home({
@@ -305,9 +306,10 @@ export default async function Home({
                   className="flex items-center gap-3 border-b py-1.5 last:border-b-0"
                 >
                   <div className="flex w-28 shrink-0 items-center gap-2">
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-medium">
-                      {m.name.slice(0, 1)}
-                    </span>
+                    <Avatar
+                      src={PEOPLE.find((p) => p.name === m.name)?.image}
+                      name={m.name}
+                    />
                     <span className="truncate text-sm">{m.name}</span>
                   </div>
                   <div className="flex flex-1 gap-px overflow-hidden rounded">
@@ -334,7 +336,7 @@ export default async function Home({
                 <span className="inline-block h-4 w-4 bg-orange-300" /> その他予定
               </span>
               <span className="flex items-center gap-1">
-                <span className="inline-block h-4 w-4 bg-emerald-100" /> 空き
+                <span className="inline-block h-4 w-4 bg-zinc-200" /> 空き
               </span>
             </div>
           </CardContent>
@@ -401,7 +403,7 @@ export default async function Home({
                             title={`${d.label} ${time} / 会議室 ${c.roomBusy ? "予約済み" : "空き"}`}
                             className={[
                               "h-8 border border-white",
-                              c.roomBusy ? "bg-red-400" : "bg-emerald-100",
+                              c.roomBusy ? "bg-red-400" : "bg-zinc-200",
                             ].join(" ")}
                           ></td>
                         );
@@ -415,7 +417,7 @@ export default async function Home({
             {/* 凡例 */}
             <div className="flex flex-wrap gap-4 text-xs text-muted-foreground">
               <span className="flex items-center gap-1">
-                <span className="inline-block h-4 w-4 bg-emerald-100" /> 空き
+                <span className="inline-block h-4 w-4 bg-zinc-200" /> 空き
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block h-4 w-4 bg-red-400" /> 予約済み
