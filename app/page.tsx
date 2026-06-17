@@ -65,6 +65,10 @@ export default async function Home({
 }: {
   searchParams: Promise<{ q?: string; wo?: string; md?: string }>;
 }) {
+  // auth.ts の async session(...) によって UI側で...
+  // const session = await auth();
+  // session.accessToken // ← これが使える
+  // session.error       // ← これが使える
   const session = await auth();
 
   if (!session) {
@@ -80,7 +84,8 @@ export default async function Home({
       </main>
     );
   }
-
+  // auth.tsにて / token.errorおよび、session.errorの箱はあるが、エラーが起きるまではundefined
+  // エラー時に、catchの中で、token.errorにRefreshTokenErrorが入り、session.errorに引き継がれる
   if (session.error === "RefreshTokenError" || !session.accessToken) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-4">
@@ -127,6 +132,7 @@ export default async function Home({
       ...calcPeople.map((p) => ({ name: p.name, calendarId: p.email })),
       { name: ROOM.name, calendarId: ROOM.calendarId },
     ];
+    // 具体的なaccessTokenの中身(ya29.xxx...のような文字列)はここでチェックされている
     const events = await listEventsForTargets(
       session.accessToken,
       targets,
