@@ -132,7 +132,7 @@ function thisWeekWeekdays(): { ymd: string; label: string }[] {
     weekday: "short",
   }).format(new Date(base));
   const dow: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
-  const offsetToMonday = (dow[wd] + 6) % 7; // 月曜まで何日戻るか
+  const offsetToMonday = ((dow[wd] ?? 1) + 6) % 7; // 月曜まで何日戻るか
   const mondayMs = base - offsetToMonday * 86400000;
 
   const out: { ymd: string; label: string }[] = [];
@@ -247,7 +247,7 @@ export function buildWeekSummary(
       // 会議室がこの30分に予約済みか
       const isRoomBusy = roomBusy.some((b) => startMs < b.end && b.start < endMs);
 
-      return { timeLabel: timeLabels[idx], freePeople, roomBusy: isRoomBusy };
+      return { timeLabel: timeLabels[idx] ?? "", freePeople, roomBusy: isRoomBusy };
     });
     return { label, cells };
   });
@@ -436,8 +436,11 @@ export function detectRoomForgotten(
 
   // 今週（月〜金）の範囲
   const week = thisWeekWeekdays();
-  const fromMs = new Date(`${week[0].ymd}T00:00:00+09:00`).getTime();
-  const toMs = new Date(`${week[week.length - 1].ymd}T23:59:59+09:00`).getTime();
+  const first = week[0];
+  const last = week[week.length - 1];
+  if (!first || !last) return [];
+  const fromMs = new Date(`${first.ymd}T00:00:00+09:00`).getTime();
+  const toMs = new Date(`${last.ymd}T23:59:59+09:00`).getTime();
 
   const out: RoomForgotten[] = [];
   for (const t of targets) {

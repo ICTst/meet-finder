@@ -43,7 +43,7 @@ export async function categorizeTargets(
   return targets.map((t, ti) => {
     const result: CategorizedTarget = { name: t.name, hard: [], soft: [] };
     t.events.forEach((ev, ei) => {
-      let cat = cats[ti][ei];
+      let cat = cats[ti]?.[ei];
       if (cat === "ambiguous") cat = aiCats[ai++] ?? "hard"; // AI結果を順に割当
       const s = ev.start?.dateTime,
         e = ev.end?.dateTime;

@@ -8,7 +8,6 @@ import {
   buildMemberDayHeatmaps,
   findCandidateSlotsCategorized,
   roomBusyIntervals,
-  type SummaryCell,
   type MemberSlotState,
 } from "@/lib/availability";
 import { categorizeTargets } from "@/lib/categorize";
@@ -174,8 +173,10 @@ export default async function Home({
   const days = businessDaysPage(wo);
   const memberDay = businessDay(md);
   const now = new Date();
-  const windowStartMs = new Date(`${days[0].ymd}T00:00:00+09:00`).getTime();
-  const windowEndMs = new Date(`${days[days.length - 1].ymd}T23:59:59+09:00`).getTime();
+  const firstYmd = days[0]?.ymd ?? memberDay.ymd;
+  const lastYmd = days[days.length - 1]?.ymd ?? firstYmd;
+  const windowStartMs = new Date(`${firstYmd}T00:00:00+09:00`).getTime();
+  const windowEndMs = new Date(`${lastYmd}T23:59:59+09:00`).getTime();
   const memberDayStartMs = new Date(`${memberDay.ymd}T00:00:00+09:00`).getTime();
   const memberDayEndMs = new Date(`${memberDay.ymd}T23:59:59+09:00`).getTime();
   // サマリー窓・メンバー表示日・直近2週間、すべてを1回の取得でまかなう
@@ -402,14 +403,14 @@ export default async function Home({
                         {time}
                       </td>
                       {summary.days.map((d) => {
-                        const c: SummaryCell = d.cells[rowIdx];
+                        const c = d.cells[rowIdx];
                         return (
                           <td
                             key={d.label + time}
-                            title={`${d.label} ${time} / 会議室 ${c.roomBusy ? "予約済み" : "空き"}`}
+                            title={`${d.label} ${time} / 会議室 ${c?.roomBusy ? "予約済み" : "空き"}`}
                             className={[
                               "h-8 border border-white",
-                              c.roomBusy ? "bg-red-400" : "bg-zinc-200",
+                              c?.roomBusy ? "bg-red-400" : "bg-zinc-200",
                             ].join(" ")}
                           ></td>
                         );
