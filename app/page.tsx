@@ -19,6 +19,7 @@ import { Avatar } from "./avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
+import { CalendarCheck } from "lucide-react";
 
 // 週サマリーのページ送り上限（0..MAX_WO ＝ 今日から平日 (MAX_WO+1)*5 日先まで）
 const MAX_WO = 3;
@@ -73,7 +74,10 @@ export default async function Home({
   if (!session) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center gap-6">
-        <h1 className="text-3xl font-semibold">みんなの日程調整くん</h1>
+        <h1 className="flex items-center gap-2 text-3xl font-semibold">
+          <CalendarCheck className="h-7 w-7 text-primary" />
+          みんなの日程調整くん
+        </h1>
         <p className="text-sm text-muted-foreground">
           AIで会議の空き枠を見つけてワンタップ予約
         </p>
@@ -203,7 +207,10 @@ export default async function Home({
   return (
     <main className="mx-auto max-w-6xl p-6">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-semibold">みんなの日程調整くん</h1>
+        <h1 className="flex items-center gap-2 text-xl font-semibold">
+          <CalendarCheck className="h-5 w-5 text-primary" />
+          みんなの日程調整くん
+        </h1>
         <div className="flex items-center gap-3">
           <a
             href="https://calendar.google.com/calendar/"
