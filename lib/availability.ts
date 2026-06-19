@@ -63,6 +63,31 @@ export function roomBusyIntervals(
   return out;
 }
 
+// 会議室の「来社（来客）」予約の busy 区間。タイトルに「来社」を含むものだけ
+// 総務が来客の事前準備（机拭き・スリッパ・書類印刷など）を見分けられるように
+export function roomVisitorIntervals(
+  events: CalendarEvent[],
+): { start: number; end: number }[] {
+  const out: { start: number; end: number }[] = [];
+  for (const ev of events) {
+    if (ev.status === "cancelled") continue;
+    if (ev.transparency === "transparent") continue;
+    if (!ev.summary?.includes("来社")) continue; // 来客の予約のみ対象
+    if (ev.start?.dateTime && ev.end?.dateTime) {
+      out.push({
+        start: new Date(ev.start.dateTime).getTime(),
+        end: new Date(ev.end.dateTime).getTime(),
+      });
+    } else if (ev.start?.date && ev.end?.date) {
+      out.push({
+        start: new Date(`${ev.start.date}T00:00:00+09:00`).getTime(),
+        end: new Date(`${ev.end.date}T00:00:00+09:00`).getTime(),
+      });
+    }
+  }
+  return out;
+}
+
 // 共通空きスロットを算出（全員＋会議室が空いている duration 分の枠）
 export function findCommonFreeSlots(
   targets: TargetEvents[],
@@ -116,6 +141,7 @@ export type SummaryCell = {
   timeLabel: string; // "09:00"
   freePeople: number; // この30分に空いている人数
   roomBusy: boolean; // この30分に会議室が予約済みか
+  roomVisitor: boolean; // その予約が「来社（来客）」か
 };
 export type SummaryDay = { label: string; cells: SummaryCell[] };
 export type WeekSummary = {
@@ -222,6 +248,7 @@ export function buildWeekSummary(
     .map((t) => busyIntervalsOf(t.events));
   const room = targets.find((t) => t.calendarId === roomCalendarId);
   const roomBusy = room ? roomBusyIntervals(room.events) : []; // 終日予約も占有扱い
+  const roomVisitor = room ? roomVisitorIntervals(room.events) : []; // 来社（来客）予約
 
   // 時間行（9:00〜18:00 の 30分刻み）。ラベルは「開始–終了」の範囲表記
   const timeLabels: string[] = [];
@@ -244,10 +271,16 @@ export function buildWeekSummary(
       const freePeople = peopleBusy.filter(
         (intervals) => !intervals.some((b) => startMs < b.end && b.start < endMs),
       ).length;
-      // 会議室がこの30分に予約済みか
+      // 会議室がこの30分に予約済みか／その予約が来社（来客）か
       const isRoomBusy = roomBusy.some((b) => startMs < b.end && b.start < endMs);
+      const isRoomVisitor = roomVisitor.some((b) => startMs < b.end && b.start < endMs);
 
-      return { timeLabel: timeLabels[idx] ?? "", freePeople, roomBusy: isRoomBusy };
+      return {
+        timeLabel: timeLabels[idx] ?? "",
+        freePeople,
+        roomBusy: isRoomBusy,
+        roomVisitor: isRoomVisitor,
+      };
     });
     return { label, cells };
   });

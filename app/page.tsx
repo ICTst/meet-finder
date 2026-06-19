@@ -19,7 +19,7 @@ import { Avatar } from "./avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import Link from "next/link";
-import { CalendarCheck } from "lucide-react";
+import { CalendarCheck, UserRound } from "lucide-react";
 
 // 週サマリーのページ送り上限（0..MAX_WO ＝ 今日から平日 (MAX_WO+1)*5 日先まで）
 const MAX_WO = 3;
@@ -414,12 +414,22 @@ export default async function Home({
                         return (
                           <td
                             key={d.label + time}
-                            title={`${d.label} ${time} / 会議室 ${c?.roomBusy ? "予約済み" : "空き"}`}
+                            title={`${d.label} ${time} / 会議室 ${
+                              c?.roomBusy
+                                ? c?.roomVisitor
+                                  ? "予約済み（来客）"
+                                  : "予約済み"
+                                : "空き"
+                            }`}
                             className={[
                               "h-8 border border-white",
                               c?.roomBusy ? "bg-red-400" : "bg-zinc-200",
                             ].join(" ")}
-                          ></td>
+                          >
+                            {c?.roomVisitor && (
+                              <UserRound className="inline-block h-3.5 w-3.5 text-white" aria-label="来客" />
+                            )}
+                          </td>
                         );
                       })}
                     </tr>
@@ -435,6 +445,12 @@ export default async function Home({
               </span>
               <span className="flex items-center gap-1">
                 <span className="inline-block h-4 w-4 bg-red-400" /> 予約済み
+              </span>
+              <span className="flex items-center gap-1">
+                <span className="flex h-4 w-4 items-center justify-center bg-red-400">
+                  <UserRound className="h-3 w-3 text-white" />
+                </span>{" "}
+                来客あり（来社）
               </span>
             </div>
           </CardContent>
